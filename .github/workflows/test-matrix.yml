@@ -13,16 +13,19 @@ jobs:
         include:
           - ha-version: "2025.1.4"
             python-version: "3.12"
+            extra-packages: "numpy"
           - ha-version: "2026.7.1"
-            python-version: "3.13"
+            python-version: "3.14"
+            extra-packages: "numpy PyTurboJPEG==1.8.3 av==17.0.1"
           - ha-version: "2026.8.3"
             python-version: "3.14"
+            extra-packages: "numpy PyTurboJPEG==1.8.3 av==17.0.1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Home Assistant ${{ matrix.ha-version }}
-        run: pip install "homeassistant==${{ matrix.ha-version }}" numpy
+        run: pip install "homeassistant==${{ matrix.ha-version }}" ${{ matrix.extra-packages }}
       - name: Run shim compatibility tests
         run: python tests/test_patch_roundtrip.py
