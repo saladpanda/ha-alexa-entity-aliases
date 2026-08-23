@@ -5,9 +5,9 @@
 Runtime Home Assistant custom integration that exposes entity-registry aliases as
 additional Amazon Alexa endpoints, without modifying Home Assistant Core files.
 
-It intentionally preserves the endpoint IDs and alias semantics of the existing
-Home Assistant Core Alexa-alias patch, so switching away from the `amitfin/patch`
-installation does not create new Alexa devices.
+Endpoint IDs are stable: the same entity and alias always produce the same Alexa
+endpoint ID, so alias endpoints are never recreated as new Alexa devices across
+restarts, updates, or alias edits.
 
 ## Installation with HACS
 
@@ -35,25 +35,9 @@ For releases, tag the repository (for example `v0.2.0`). HACS can then install a
 
 Copy `custom_components/alexa_entity_aliases/` into your Home Assistant configuration directory, restart, and set it up under **Settings -> Devices & Services -> Add Integration**.
 
-## Seamless migration from the Core patch
+## Alexa endpoint IDs
 
-Use this order:
-
-1. Keep the existing `amitfin/patch` Alexa-alias patch installed.
-2. Install this custom integration and set it up under **Settings -> Devices &
-   Services -> Add Integration**.
-3. Restart Home Assistant once.
-4. Verify the log contains a message that Alexa alias support already exists in Core.
-   In this state the custom integration deliberately does nothing.
-5. Disable/remove the `amitfin/patch` modifications for the Alexa alias feature.
-6. Upgrade/reinstall stock Home Assistant Core as needed so the modified Core files
-   are gone.
-7. Restart Home Assistant.
-8. Verify the log contains `Installed Alexa alias compatibility shim`.
-9. Run one Alexa sync from Home Assistant Cloud (recommended, but it does not change
-   existing endpoint IDs).
-
-Do **not** delete the Alexa devices between steps. The endpoint IDs remain exactly:
+The alias endpoint ID format is:
 
 ```
 <entity_id with . replaced by #>::alias::<slugified alias>
@@ -65,7 +49,7 @@ Example:
 switch#desk::alias::reading_light
 ```
 
-The alias-specific `customIdentifier` is also kept compatible:
+The alias-specific `customIdentifier` is:
 
 ```
 <cloud-user>-<entity_id>-alias-<slugified alias>
@@ -91,10 +75,6 @@ the custom integration loads.
 The Cloud add/update path additionally relies on the Cloud Alexa config's private
 `_sync_helper` API. If that API is removed by Core, sync errors are logged and
 stale-endpoint deletion still runs independently.
-
-If Core already contains an Alexa-alias patch (or a compatible upstream
-implementation), the integration detects `ALEXA_ALIAS_DELIMITER` plus the alias API
-on `AbstractConfig` and stays inactive. This is what makes a staged migration safe.
 
 ## Supported versions
 
@@ -127,7 +107,7 @@ upgrading.
 - Literal entity-registry aliases are exposed. The computed-name sentinel is not
   exposed as a second endpoint.
 - Aliases that translate/slugify to the same endpoint ID are deduplicated.
-- Alias ordering is case-insensitive and stable, matching the existing Core patch.
+- Alias ordering is case-insensitive and stable.
 - Home Assistant Cloud is supported for alias add/remove reconciliation.
 - Unloading or removing the integration's config entry restores every patched
   Core function, so disabling it takes effect without a restart.
@@ -168,7 +148,3 @@ Assistant's `COMPUTED_NAME` sentinel is expanded to the current computed entity
 name. This is off by default because recent Home Assistant versions can contain a
 computed-name entry for most registry entities, which would make a literal-alias
 inventory unnecessarily large.
-
-This action is registered even while the old Core/`amitfin/patch` implementation is
-still installed, so it can also be used to verify aliases before switching to the
-runtime shim.

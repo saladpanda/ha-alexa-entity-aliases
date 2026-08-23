@@ -78,7 +78,7 @@ def test_install_uninstall_roundtrip() -> None:
     before = snapshot()
 
     installed = patches.install()
-    assert installed is True, "expected shim to install on stock Core"
+    assert installed is None, "install() must not return a value"
 
     during = snapshot()
     changed = [key for key in before if before[key] != during[key]]
@@ -118,12 +118,6 @@ def test_rollback_on_partial_failure() -> None:
 
 
 def main() -> int:
-    if patches.core_already_supports_aliases():
-        assert patches.install() is False
-        patches.uninstall()  # must be a safe no-op
-        print("Core natively supports aliases; inactive-shim path OK")
-        return 0
-
     test_parameter_names_fallback()
     print("parameter-name fallback OK")
     test_install_uninstall_roundtrip()

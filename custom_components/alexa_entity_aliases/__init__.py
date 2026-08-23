@@ -22,7 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     try:
-        installed = install()
+        install()
     except Exception:
         _LOGGER.exception(
             "Alexa Entity Aliases is incompatible with this Home Assistant version; "
@@ -32,12 +32,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_services(hass)
     hass.data[DOMAIN][DATA_ALIAS_CACHE] = build_alias_cache(hass)
-
-    if not installed:
-        # Seamless migration mode: while the old amitfin/Core patch is present,
-        # leave it fully in charge. After that patch is removed and HA restarts,
-        # this component automatically becomes active.
-        return True
 
     async def _listener(event: Any) -> None:
         await handle_registry_update(hass, event)

@@ -1,7 +1,8 @@
 """Stable alias endpoint model.
 
-The endpoint format deliberately matches the Home Assistant Core Alexa-alias
-patch. Changing it would cause Alexa to see aliases as different devices.
+Endpoint IDs are stable: the same entity and alias always produce the same
+Alexa endpoint ID. Changing the format would cause Alexa to see aliases as
+different devices.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ def _translation_table() -> dict[int, None]:
 
 
 def generate_alexa_id_for(entity_id: str, alias: str | None = None) -> str:
-    """Generate the exact endpoint ID used by the old Core patch."""
+    """Generate the canonical Alexa endpoint ID for an entity or alias."""
     alexa_id = entity_id.replace(".", "#").translate(_translation_table())
     if alias is None:
         return alexa_id
@@ -38,7 +39,7 @@ def resolve_entity_id(endpoint_id: str) -> str:
 
 
 def normalize_aliases(entity_id: str, aliases: Collection[Any]) -> list[str]:
-    """Normalize aliases exactly like the old Core patch."""
+    """Normalize aliases into their display form, deduplicated and sorted."""
     try:
         computed_name = er.COMPUTED_NAME
     except AttributeError:

@@ -23,7 +23,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 from homeassistant.util.json import JsonObjectType, json_loads_object
 
-from .const import ALEXA_ALIAS_DELIMITER
 from .model import (
     AliasAlexaEntity,
     generate_alexa_id_for,
@@ -40,16 +39,6 @@ _PATCH_MARKER = "__alexa_entity_aliases_patch__"
 # (owner, attribute name, pre-patch value) for every installed patch, in
 # install order. Used by uninstall() to fully restore Core modules.
 _ORIGINALS: list[tuple[Any, str, Any]] = []
-
-
-def core_already_supports_aliases() -> bool:
-    """Detect the user's existing patch or a future equivalent implementation."""
-    return bool(
-        getattr(alexa_config, "ALEXA_ALIAS_DELIMITER", None) == ALEXA_ALIAS_DELIMITER
-        and hasattr(alexa_config.AbstractConfig, "generate_alexa_id_for")
-        and hasattr(alexa_config.AbstractConfig, "get_entity_aliases")
-        and hasattr(alexa_config.AbstractConfig, "resolve_entity_id")
-    )
 
 
 def _mark(obj: Any) -> Any:
@@ -121,18 +110,8 @@ def validate_core_shape() -> None:
             )
 
 
-def install() -> bool:
-    """Install alias behavior into unmodified Core modules.
-
-    Returns True if patches were installed, False when Core already supports
-    aliases and the shim stays inactive.
-    """
-    if core_already_supports_aliases():
-        _LOGGER.info(
-            "Alexa alias support already exists in Core; compatibility shim is inactive"
-        )
-        return False
-
+def install() -> None:
+    """Install alias behavior into unmodified Core modules."""
     validate_core_shape()
     try:
         _install_config_api()
@@ -143,7 +122,6 @@ def install() -> bool:
         uninstall()
         raise
     _LOGGER.info("Installed Alexa alias compatibility shim")
-    return True
 
 
 def uninstall() -> None:

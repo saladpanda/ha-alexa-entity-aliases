@@ -12,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DATA_ALIAS_CACHE, DOMAIN
 from .model import get_alias_alexa_ids, get_entity_aliases, normalize_aliases
-from .patches import async_send_delete_endpoint_ids, core_already_supports_aliases
+from .patches import async_send_delete_endpoint_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,11 +42,6 @@ async def _get_cloud_alexa_config(hass: Any) -> Any | None:
 
 async def handle_registry_update(hass: Any, event: Any) -> None:
     """Reconcile added/removed aliases while keeping existing endpoint IDs stable."""
-    # When the old Core patch is still installed, its Cloud listener already
-    # performs this job. Doing it twice is unnecessary and can duplicate reports.
-    if core_already_supports_aliases():
-        return
-
     data = event.data
     entity_id = data["entity_id"]
     action = data["action"]
