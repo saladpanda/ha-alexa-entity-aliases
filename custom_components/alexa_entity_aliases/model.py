@@ -130,4 +130,8 @@ class AliasAlexaEntity:
         return result
 
     def __getattr__(self, name: str) -> Any:
+        # Never forward protocol/dunder lookups (copy, iteration, etc.) to the
+        # wrapped entity; the proxy must not silently adopt its behavior.
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
         return getattr(self._wrapped, name)

@@ -96,14 +96,27 @@ async def handle_registry_update(hass: Any, event: Any) -> None:
         new_ids = set(get_alias_alexa_ids(hass, entity_id, current_aliases))
         stale_ids.extend(sorted(old_ids - new_ids))
 
-    try:
-        # Add/update current aliases first. This mirrors the old patch and avoids
-        # a gap when an alias is changed or an entity is renamed.
-        if action != "remove":
+    # Syncing additions and deleting stale endpoints are deliberately
+    # independent: a failure in the private Cloud sync API must not also
+    # skip removal of endpoints that Alexa should no longer see.
+    if action != "remove":
+        try:
+            # Add/update current aliases first. This mirrors the old patch and
+            # avoids a gap when an alias is changed or an entity is renamed.
             await config._sync_helper([entity_id], [])
-        if stale_ids:
-            await async_send_delete_endpoint_ids(hass, config, stale_ids)
+        except NoTokenAvailable:
+            return
+        except Exception:
+            _LOGGER.exception("Failed to sync Alexa aliases for %s", entity_id)
+
+    if not stale_ids:
+        return
+
+    try:
+        await async_send_delete_endpoint_ids(hass, config, stale_ids)
     except NoTokenAvailable:
         return
     except Exception:
-        _LOGGER.exception("Failed to reconcile Alexa aliases for %s", entity_id)
+        _LOGGER.exception(
+            "Failed to delete stale Alexa alias endpoints for %s", entity_id
+        )

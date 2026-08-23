@@ -1,5 +1,7 @@
 # Alexa Entity Aliases
 
+![Alexa Entity Aliases logo](docs/logo.png)
+
 Runtime Home Assistant custom integration that exposes entity-registry aliases as
 additional Amazon Alexa endpoints, without modifying Home Assistant Core files.
 
@@ -85,6 +87,10 @@ It patches only these narrow seams:
 Alias creation/removal is reconciled by a separate entity-registry listener. This
 avoids depending on a Cloud callback that might already have been registered before
 the custom integration loads.
+
+The Cloud add/update path additionally relies on the Cloud Alexa config's private
+`_sync_helper` API. If that API is removed by Core, sync errors are logged and
+stale-endpoint deletion still runs independently.
 
 If Core already contains an Alexa-alias patch (or a compatible upstream
 implementation), the integration detects `ALEXA_ALIAS_DELIMITER` plus the alias API

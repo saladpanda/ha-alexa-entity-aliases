@@ -20,7 +20,6 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Alexa Entity Aliases from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    async_register_services(hass)
 
     try:
         installed = install()
@@ -31,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         return False
 
+    async_register_services(hass)
     hass.data[DOMAIN][DATA_ALIAS_CACHE] = build_alias_cache(hass)
 
     if not installed:
