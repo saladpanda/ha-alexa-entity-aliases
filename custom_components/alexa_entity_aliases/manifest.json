@@ -5,8 +5,8 @@
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/saladpanda/ha-alexa-entity-aliases",
-  "integration_type": "system",
+  "integration_type": "service",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/saladpanda/ha-alexa-entity-aliases/issues",
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
