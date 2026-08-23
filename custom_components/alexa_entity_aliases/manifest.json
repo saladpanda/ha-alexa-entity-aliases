@@ -1,10 +1,12 @@
 {
   "domain": "alexa_entity_aliases",
   "name": "Alexa Entity Aliases",
+  "after_dependencies": ["alexa"],
   "codeowners": [],
+  "config_flow": true,
   "documentation": "https://github.com/saladpanda/ha-alexa-entity-aliases",
   "integration_type": "system",
   "iot_class": "cloud_push",
-  "version": "0.2.0",
-  "issue_tracker": "https://github.com/saladpanda/ha-alexa-entity-aliases/issues"
+  "issue_tracker": "https://github.com/saladpanda/ha-alexa-entity-aliases/issues",
+  "version": "0.2.0"
 }

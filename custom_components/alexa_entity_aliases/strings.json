@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Alexa Entity Aliases",
+        "description": "Exposes entity-registry aliases as additional Amazon Alexa endpoints. After setup, run one Alexa sync from Home Assistant Cloud so the alias endpoints are discovered."
+      }
+    },
+    "abort": {
+      "already_configured": "Alexa Entity Aliases is already configured."
+    }
+  }
+}

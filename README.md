@@ -15,26 +15,31 @@ This repository is laid out for installation as a HACS custom repository.
 2. Open the menu and choose **Custom repositories**.
 3. Add `https://github.com/saladpanda/ha-alexa-entity-aliases` with category **Integration**.
 4. Search for **Alexa Entity Aliases** and install it.
-5. Add this to `configuration.yaml`:
+5. Restart Home Assistant.
+6. Go to **Settings -> Devices & Services -> Add Integration** and choose
+   **Alexa Entity Aliases**, then submit the confirmation dialog.
 
-```yaml
-alexa_entity_aliases:
-```
+No `configuration.yaml` changes are needed; setup happens entirely through the UI.
 
-6. Restart Home Assistant.
+### Upgrading from a YAML-based version
+
+If an earlier release was enabled with an `alexa_entity_aliases:` line in
+`configuration.yaml`, delete that line after updating. The integration no longer
+supports YAML setup.
 
 For releases, tag the repository (for example `v0.2.0`). HACS can then install and update tagged versions normally.
 
 ### Manual installation
 
-Copy `custom_components/alexa_entity_aliases/` into your Home Assistant configuration directory, add the YAML above, and restart.
+Copy `custom_components/alexa_entity_aliases/` into your Home Assistant configuration directory, restart, and set it up under **Settings -> Devices & Services -> Add Integration**.
 
 ## Seamless migration from the Core patch
 
 Use this order:
 
 1. Keep the existing `amitfin/patch` Alexa-alias patch installed.
-2. Install this custom integration and add `alexa_entity_aliases:`.
+2. Install this custom integration and set it up under **Settings -> Devices &
+   Services -> Add Integration**.
 3. Restart Home Assistant once.
 4. Verify the log contains a message that Alexa alias support already exists in Core.
    In this state the custom integration deliberately does nothing.
@@ -104,6 +109,8 @@ regression-tested against every Home Assistant monthly release before upgrading.
 - Aliases that translate/slugify to the same endpoint ID are deduplicated.
 - Alias ordering is case-insensitive and stable, matching the existing Core patch.
 - Home Assistant Cloud is supported for alias add/remove reconciliation.
+- Unloading or removing the integration's config entry restores every patched
+  Core function, so disabling it takes effect without a restart.
 
 ## List all entity aliases
 

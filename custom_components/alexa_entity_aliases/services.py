@@ -97,3 +97,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         schema=LIST_ALIASES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+
+
+def async_unregister_services(hass: HomeAssistant) -> None:
+    """Remove integration actions."""
+    hass.services.async_remove(DOMAIN, SERVICE_LIST_ALIASES)

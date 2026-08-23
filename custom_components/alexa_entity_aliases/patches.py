@@ -37,6 +37,10 @@ from .model import (
 _LOGGER = logging.getLogger(__name__)
 _PATCH_MARKER = "__alexa_entity_aliases_patch__"
 
+# (owner, attribute name, pre-patch value) for every installed patch, in
+# install order. Used by uninstall() to fully restore Core modules.
+_ORIGINALS: list[tuple[Any, str, Any]] = []
+
 
 def core_already_supports_aliases() -> bool:
     """Detect the user's existing patch or a future equivalent implementation."""
@@ -55,6 +59,15 @@ def _mark(obj: Any) -> Any:
 
 def _is_marked(obj: Any) -> bool:
     return bool(getattr(obj, _PATCH_MARKER, False))
+
+
+# Sentinel recorded when a patched attribute did not exist before installation.
+_MISSING = object()
+
+
+def _set_patched(owner: Any, name: str, value: Any) -> None:
+    _ORIGINALS.append((owner, name, getattr(owner, name, _MISSING)))
+    setattr(owner, name, value)
 
 
 def validate_core_shape() -> None:
@@ -92,20 +105,45 @@ def validate_core_shape() -> None:
             )
 
 
-def install() -> None:
-    """Install alias behavior into unmodified Core modules."""
+def install() -> bool:
+    """Install alias behavior into unmodified Core modules.
+
+    Returns True if patches were installed, False when Core already supports
+    aliases and the shim stays inactive.
+    """
     if core_already_supports_aliases():
         _LOGGER.info(
             "Alexa alias support already exists in Core; compatibility shim is inactive"
         )
-        return
+        return False
 
     validate_core_shape()
-    _install_config_api()
-    _install_directive_resolution()
-    _install_discovery()
-    _install_state_reporting()
+    try:
+        _install_config_api()
+        _install_directive_resolution()
+        _install_discovery()
+        _install_state_reporting()
+    except Exception:
+        uninstall()
+        raise
     _LOGGER.info("Installed Alexa alias compatibility shim")
+    return True
+
+
+def uninstall() -> None:
+    """Restore Core modules to their pre-install state."""
+    if not _ORIGINALS:
+        return
+    while _ORIGINALS:
+        owner, name, original = _ORIGINALS.pop()
+        try:
+            if original is _MISSING:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, original)
+        except Exception:
+            _LOGGER.exception("Unable to restore patched Alexa attribute %s", name)
+    _LOGGER.info("Removed Alexa alias compatibility shim")
 
 
 def _install_config_api() -> None:
@@ -135,12 +173,12 @@ def _install_config_api() -> None:
     def resolve_entity_id_method(self: Any, endpoint_id: str) -> str:
         return resolve_entity_id(endpoint_id)
 
-    cls.generate_alexa_id_for = generate_alexa_id_for_method
-    cls.get_entity_aliases = get_entity_aliases_method
-    cls.normalize_aliases = normalize_aliases_method
-    cls.get_alias_alexa_ids = get_alias_alexa_ids_method
-    cls.get_entity_alexa_ids = get_entity_alexa_ids_method
-    cls.resolve_entity_id = resolve_entity_id_method
+    _set_patched(cls, "generate_alexa_id_for", generate_alexa_id_for_method)
+    _set_patched(cls, "get_entity_aliases", get_entity_aliases_method)
+    _set_patched(cls, "normalize_aliases", normalize_aliases_method)
+    _set_patched(cls, "get_alias_alexa_ids", get_alias_alexa_ids_method)
+    _set_patched(cls, "get_entity_alexa_ids", get_entity_alexa_ids_method)
+    _set_patched(cls, "resolve_entity_id", resolve_entity_id_method)
 
 
 def _install_directive_resolution() -> None:
@@ -162,7 +200,7 @@ def _install_directive_resolution() -> None:
         if "instance" in self._directive["header"]:
             self.instance = self._directive["header"]["instance"]
 
-    alexa_state_report.AlexaDirective.load_entity = load_entity
+    _set_patched(alexa_state_report.AlexaDirective, "load_entity", load_entity)
 
 
 def _entities_with_aliases(hass: Any, config: Any) -> list[Any]:
@@ -187,7 +225,9 @@ def _install_discovery() -> None:
     # affects Alexa discovery without changing Cloud's entity-listing UI or its
     # canonical entity iteration.
     if not _is_marked(alexa_handlers.async_get_entities):
-        alexa_handlers.async_get_entities = _mark(_entities_with_aliases)
+        _set_patched(
+            alexa_handlers, "async_get_entities", _mark(_entities_with_aliases)
+        )
 
 
 async def _post_response(hass: Any, config: Any, message: Any, token: str) -> Any:
@@ -402,4 +442,4 @@ def _install_state_reporting() -> None:
     }
     for name, replacement in replacements.items():
         _mark(replacement)
-        setattr(alexa_state_report, name, replacement)
+        _set_patched(alexa_state_report, name, replacement)
