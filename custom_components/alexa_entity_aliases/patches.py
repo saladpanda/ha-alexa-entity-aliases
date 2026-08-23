@@ -70,6 +70,22 @@ def _set_patched(owner: Any, name: str, value: Any) -> None:
     setattr(owner, name, value)
 
 
+def _parameter_names(func: Any) -> set[str]:
+    """Return a callable's parameter names, tolerating unresolvable annotations."""
+    try:
+        return set(inspect.signature(func).parameters)
+    except Exception:
+        # Python 3.14 evaluates annotations during signature introspection,
+        # and Core annotations may reference names that are not importable in
+        # their module (e.g. AbstractConfig in state_report). Only the names
+        # are needed here, and those remain available on the code object.
+        code = getattr(func, "__code__", None)
+        if code is None:
+            raise
+        count = code.co_argcount + code.co_kwonlyargcount
+        return set(code.co_varnames[:count])
+
+
 def validate_core_shape() -> None:
     """Fail closed if the Core internals we depend on have materially changed."""
     required = {
@@ -98,7 +114,7 @@ def validate_core_shape() -> None:
         ),
     }
     for name, (func, params) in required_params.items():
-        present = set(inspect.signature(func).parameters)
+        present = _parameter_names(func)
         if not params <= present:
             raise RuntimeError(
                 f"Unsupported Home Assistant Alexa internals: {name} signature changed"
