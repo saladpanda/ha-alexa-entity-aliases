@@ -1,6 +1,6 @@
 # Alexa Entity Aliases
 
-![Alexa Entity Aliases logo](docs/logo.png)
+<img src="docs/logo.png" width="160" alt="Alexa Entity Aliases logo">
 
 Runtime Home Assistant custom integration that exposes entity-registry aliases as
 additional Amazon Alexa endpoints, without modifying Home Assistant Core files.
