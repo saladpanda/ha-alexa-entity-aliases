@@ -98,15 +98,23 @@ on `AbstractConfig` and stays inactive. This is what makes a staged migration sa
 
 ## Supported versions
 
-The implementation was checked against the Alexa API shapes in Home Assistant
-2026.7.1 and 2026.8.2 and uses feature/signature checks instead of a hard-coded
-HA version.
-Additive Core changes should normally keep working. If a required internal API is
-removed or materially changed, setup fails closed and logs an incompatibility rather
-than partially patching Alexa.
+The shim adapts to Home Assistant through capability detection instead of version
+checks: modern APIs are tried first and behavior falls back to older shapes when
+detection fails. For example, parameter introspection falls back to code-object
+inspection on Python 3.14, where signature evaluation can raise on Core's own
+annotations. New compatibility seams should follow the same try-modern/fall-back
+pattern and stay centralized in `patches.py`.
 
-Because this still relies on private Home Assistant Alexa internals, it should be
-regression-tested against every Home Assistant monthly release before upgrading.
+A CI matrix (`.github/workflows/test-matrix.yml`) runs the install/uninstall
+round-trip against each supported Home Assistant release — currently 2025.1.4,
+2026.7.1, and 2026.8.3. Add a matrix entry (with its Python version) for every
+release you want to keep working.
+
+Setup still fails closed: if a required internal API is removed or materially
+changed, setup fails and logs an incompatibility rather than partially patching
+Alexa. Because this relies on private Home Assistant Alexa internals, keep the
+matrix current and regression-test against every monthly release before
+upgrading.
 
 ## Notes
 

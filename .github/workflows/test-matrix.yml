@@ -1,0 +1,28 @@
+name: Compatibility tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ha-version: "2025.1.4"
+            python-version: "3.12"
+          - ha-version: "2026.7.1"
+            python-version: "3.13"
+          - ha-version: "2026.8.3"
+            python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Home Assistant ${{ matrix.ha-version }}
+        run: pip install "homeassistant==${{ matrix.ha-version }}" numpy
+      - name: Run shim compatibility tests
+        run: python tests/test_patch_roundtrip.py
