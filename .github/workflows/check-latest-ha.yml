@@ -1,0 +1,126 @@
+name: Check latest HA release
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine newest Home Assistant releases
+        id: newest
+        run: |
+          pip install --quiet packaging
+          python - <<'EOF'
+          import json
+          import os
+          import urllib.request
+          from packaging.version import Version
+
+          data = json.load(
+              urllib.request.urlopen("https://pypi.org/pypi/homeassistant/json")
+          )
+          versions = [Version(v) for v in data["releases"]]
+          stable = max(v for v in versions if not v.is_prerelease)
+          betas = [v for v in versions if v.is_prerelease]
+          beta = max(betas) if betas else stable
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"stable={stable}\nbeta={beta}\n")
+          print(f"latest stable: {stable}, latest beta: {beta}")
+          EOF
+
+      - name: Read last tested versions
+        id: tested
+        run: |
+          echo "stable=$(sed -n 1p .github/ha-tested-versions.txt)" >> "$GITHUB_OUTPUT"
+          echo "beta=$(sed -n 2p .github/ha-tested-versions.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute versions to test
+        id: todo
+        run: |
+          to_test=""
+          if [ "${{ steps.newest.outputs.stable }}" != "${{ steps.tested.outputs.stable }}" ]; then
+            to_test="$to_test ${{ steps.newest.outputs.stable }}"
+          fi
+          if [ "${{ steps.newest.outputs.beta }}" != "${{ steps.tested.outputs.beta }}" ]; then
+            to_test="$to_test ${{ steps.newest.outputs.beta }}"
+          fi
+          echo "versions=$(echo $to_test)" >> "$GITHUB_OUTPUT"
+          echo "New versions to test:${to_test:- none}"
+
+      - uses: actions/setup-python@v5
+        if: steps.todo.outputs.versions != ''
+        with:
+          python-version: "3.14"
+
+      - name: Test new releases
+        if: steps.todo.outputs.versions != ''
+        run: |
+          rm -f passed failed
+          for v in ${{ steps.todo.outputs.versions }}; do
+            echo "::group::Home Assistant $v"
+            if pip install --quiet "homeassistant==$v" numpy PyTurboJPEG av \
+               && python tests/test_patch_roundtrip.py; then
+              echo "$v" >> passed
+            else
+              echo "$v" >> failed
+            fi
+            echo "::endgroup::"
+          done
+          if [ -f failed ]; then
+            echo "At least one release failed: $(cat failed | tr '\n' ' ')"
+            exit 1
+          fi
+
+      - name: Record passing versions
+        if: always() && steps.todo.outputs.versions != ''
+        run: |
+          touch passed failed
+          new_stable=$(grep -v b passed | tail -1 || true)
+          new_beta=$(grep b passed | tail -1 || true)
+          if [ -n "$new_stable" ]; then
+            sed -i "1s/.*/$new_stable/" .github/ha-tested-versions.txt
+          fi
+          if [ -n "$new_beta" ]; then
+            sed -i "2s/.*/$new_beta/" .github/ha-tested-versions.txt
+          fi
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/ha-tested-versions.txt
+          git commit -m "Compatibility check: tested ${{ steps.todo.outputs.versions }}"
+          git push
+
+      - name: Open issues for failing versions
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          while read -r v; do
+            [ -z "$v" ] && continue
+            existing=$(gh issue list --state open \
+              --search "Home Assistant $v compatibility check failed in:title" \
+              --json number --jq length)
+            if [ "$existing" = "0" ]; then
+              gh issue create \
+                --title "Home Assistant $v compatibility check failed" \
+                --body "The automated compatibility check failed for Home Assistant **$v**.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          The integration fails closed on incompatible internals, so a live
+          instance keeps working but the shim will not install on this version.
+          Update \`patches.py\` (and add the version to \`test-matrix.yml\`) before
+          upgrading."
+            fi
+          done < failed

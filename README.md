@@ -110,6 +110,12 @@ round-trip against each supported Home Assistant release — currently 2025.1.4,
 2026.7.1, and 2026.8.3. Add a matrix entry (with its Python version) for every
 release you want to keep working.
 
+A daily workflow (`check-latest-ha.yml`) additionally watches PyPI for new
+stable and beta releases, runs the compatibility suite against anything it has
+not tested yet, records passing versions in `.github/ha-tested-versions.txt`,
+and opens a GitHub issue when a release fails — so Core breakage is reported
+without watching release notes.
+
 Setup still fails closed: if a required internal API is removed or materially
 changed, setup fails and logs an incompatibility rather than partially patching
 Alexa. Because this relies on private Home Assistant Alexa internals, keep the
