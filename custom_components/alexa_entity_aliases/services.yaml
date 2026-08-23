@@ -1,0 +1,16 @@
+list_aliases:
+  name: List aliases
+  description: >-
+    Return all entity-registry aliases and the Alexa alias endpoint IDs generated
+    by this integration.
+  fields:
+    include_computed:
+      name: Include computed names
+      description: >-
+        Include Home Assistant's computed-name aliases resolved to their current
+        entity names. Disabled by default so the result only contains aliases
+        explicitly configured by the user.
+      required: false
+      default: false
+      selector:
+        boolean:
