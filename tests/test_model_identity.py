@@ -47,8 +47,13 @@ def test_bounded_alias_ids() -> None:
         endpoint_one = model.generate_alexa_id_for(entity_id, alias_one)
         endpoint_two = model.generate_alexa_id_for(entity_id, alias_two)
         assert len(endpoint_one) == model.MAX_ENDPOINT_ID_LENGTH
+        assert endpoint_one.isascii()
         assert endpoint_one == model.generate_alexa_id_for(entity_id, alias_one)
         assert endpoint_one != endpoint_two
+
+        unicode_endpoint = model.generate_alexa_id_for(entity_id, "Lämp in the Office")
+        assert unicode_endpoint.isascii()
+        assert len(unicode_endpoint) <= model.MAX_ENDPOINT_ID_LENGTH
 
         exact_alias = "a" * (
             model.MAX_ENDPOINT_ID_LENGTH

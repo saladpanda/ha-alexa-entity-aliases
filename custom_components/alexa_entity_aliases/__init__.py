@@ -52,4 +52,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_unregister_services(hass)
     uninstall()
+    if not data:
+        hass.data.pop(DOMAIN, None)
     return True
