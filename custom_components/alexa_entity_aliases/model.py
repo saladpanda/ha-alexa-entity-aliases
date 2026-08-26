@@ -73,6 +73,7 @@ def normalize_alias_identity(alias: str) -> tuple[str, str] | None:
         or not alias_slug
         or not alias_slug.isascii()
         or not all(character.isalnum() or character == "_" for character in alias_slug)
+        or not any(character.isalnum() for character in alias_slug)
     ):
         return None
     return display_name, alias_slug
