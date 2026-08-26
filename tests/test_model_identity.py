@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "custom_components"))
@@ -54,6 +55,18 @@ def test_bounded_alias_ids() -> None:
         unicode_endpoint = model.generate_alexa_id_for(entity_id, "Lämp in the Office")
         assert unicode_endpoint.isascii()
         assert len(unicode_endpoint) <= model.MAX_ENDPOINT_ID_LENGTH
+
+        wrapped = SimpleNamespace(
+            hass=None,
+            config=SimpleNamespace(user_identifier=lambda: "u" * 100),
+            entity=None,
+            entity_conf={},
+            entity_id=entity_id,
+        )
+        alias_entity = model.AliasAlexaEntity(wrapped, alias_one)
+        custom_identifier = alias_entity.custom_identifier()
+        assert len(custom_identifier) <= model.MAX_CUSTOM_IDENTIFIER_LENGTH
+        assert custom_identifier == alias_entity.custom_identifier()
 
         exact_alias = "a" * (
             model.MAX_ENDPOINT_ID_LENGTH

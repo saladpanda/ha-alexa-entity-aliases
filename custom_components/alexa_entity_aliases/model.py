@@ -21,6 +21,7 @@ from .const import ALEXA_ALIAS_DELIMITER
 _LOGGER = logging.getLogger(__name__)
 
 MAX_ENDPOINT_ID_LENGTH = 256
+MAX_CUSTOM_IDENTIFIER_LENGTH = 256
 MAX_DESCRIPTION_LENGTH = 128
 MAX_FRIENDLY_NAME_LENGTH = 256
 
@@ -70,6 +71,20 @@ def normalize_alias_identity(alias: str) -> tuple[str, str] | None:
     if not display_name or not alias_slug:
         return None
     return display_name, alias_slug
+
+
+def generate_custom_identifier(user_identifier: str, entity_id: str, alias: str) -> str:
+    """Generate a stable Alexa custom identifier for an alias endpoint."""
+    identity = normalize_alias_identity(alias)
+    if identity is None:
+        raise ValueError("Alias has no valid Alexa identity")
+
+    identifier = f"{user_identifier}-{entity_id}-alias-{identity[1]}"
+    if len(identifier) <= MAX_CUSTOM_IDENTIFIER_LENGTH:
+        return identifier
+
+    digest = sha256(identifier.encode()).hexdigest()[:12]
+    return f"{identifier[: MAX_CUSTOM_IDENTIFIER_LENGTH - len(digest) - 1]}-{digest}"
 
 
 def normalize_aliases(entity_id: str, aliases: Collection[Any]) -> list[str]:
@@ -162,12 +177,8 @@ class AliasAlexaEntity:
         return generate_alexa_id_for(self.entity_id, self.alias)
 
     def custom_identifier(self) -> str:
-        identity = normalize_alias_identity(self.alias)
-        if identity is None:
-            raise ValueError("Alias has no valid Alexa identity")
-        return (
-            f"{self.config.user_identifier()}-{self.entity_id}"
-            f"-alias-{identity[1]}"
+        return generate_custom_identifier(
+            self.config.user_identifier(), self.entity_id, self.alias
         )
 
     def serialize_discovery(self) -> dict[str, Any]:
