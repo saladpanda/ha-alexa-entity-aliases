@@ -28,4 +28,6 @@ jobs:
       - name: Install Home Assistant ${{ matrix.ha-version }}
         run: pip install "homeassistant==${{ matrix.ha-version }}" ${{ matrix.extra-packages }}
       - name: Run shim compatibility tests
-        run: python tests/test_patch_roundtrip.py
+        run: |
+          python tests/test_model_identity.py
+          python tests/test_patch_roundtrip.py

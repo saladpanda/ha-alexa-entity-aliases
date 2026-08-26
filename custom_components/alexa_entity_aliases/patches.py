@@ -187,6 +187,11 @@ def _install_directive_resolution() -> None:
         entity = hass.states.get(self.entity_id)
         if not entity or not config.should_expose(self.entity_id):
             raise alexa_state_report.AlexaInvalidEndpointError(endpoint_id)
+        canonical_id = generate_alexa_id_for(self.entity_id)
+        if endpoint_id != canonical_id and endpoint_id not in get_alias_alexa_ids(
+            hass, self.entity_id
+        ):
+            raise alexa_state_report.AlexaInvalidEndpointError(endpoint_id)
         self.entity = entity
         self.endpoint = alexa_entities.ENTITY_ADAPTERS[self.entity.domain](
             hass, config, self.entity
