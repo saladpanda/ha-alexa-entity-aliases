@@ -74,6 +74,15 @@ def test_parameter_names_fallback() -> None:
     assert patches._parameter_names(load_entity) == {"self", "hass", "config"}
 
 
+def test_response_error_parsing() -> None:
+    assert patches._response_error('{"payload":{"code":"BAD","description":"bad"}}') == (
+        "BAD",
+        "bad",
+    )
+    for response in ("", "<html>error</html>", "{}", '{"payload":{}}'):
+        assert patches._response_error(response) is None
+
+
 def test_install_uninstall_roundtrip() -> None:
     before = snapshot()
 
@@ -91,6 +100,34 @@ def test_install_uninstall_roundtrip() -> None:
     assert patches._ORIGINALS == [], "_ORIGINALS not drained"
 
     patches.uninstall()  # second call must be a no-op
+
+
+def test_double_install_is_harmless() -> None:
+    before = snapshot()
+    patches.install()
+    first = snapshot()
+    originals_count = len(patches._ORIGINALS)
+
+    patches.install()
+    assert snapshot() == first, "second install changed patched attributes"
+    assert len(patches._ORIGINALS) == originals_count, "second install recorded patches"
+
+    patches.uninstall()
+    assert snapshot() == before, "double install did not restore originals"
+
+
+def test_uninstall_preserves_foreign_patch() -> None:
+    owner, name = SNAPSHOT_ATTRS[0]
+    original = getattr(owner, name)
+    patches.install()
+
+    def foreign_patch(*args, **kwargs):
+        return None
+
+    setattr(owner, name, foreign_patch)
+    patches.uninstall()
+    assert getattr(owner, name) is foreign_patch, "uninstall overwrote a foreign patch"
+    setattr(owner, name, original)
 
 
 def test_rollback_on_partial_failure() -> None:
@@ -120,8 +157,14 @@ def test_rollback_on_partial_failure() -> None:
 def main() -> int:
     test_parameter_names_fallback()
     print("parameter-name fallback OK")
+    test_response_error_parsing()
+    print("response-error parsing OK")
     test_install_uninstall_roundtrip()
     print("install/uninstall round-trip OK")
+    test_double_install_is_harmless()
+    print("double install OK")
+    test_uninstall_preserves_foreign_patch()
+    print("foreign patch preservation OK")
     test_rollback_on_partial_failure()
     print("rollback-on-failure OK")
     print("ALL COMPATIBILITY TESTS PASSED")

@@ -40,6 +40,17 @@ async def _get_cloud_alexa_config(hass: Any) -> Any | None:
         return None
 
 
+def _sync_helper(config: Any) -> Any | None:
+    """Return the private Cloud sync capability when this Core version has it."""
+    helper = getattr(config, "_sync_helper", None)
+    if not callable(helper):
+        _LOGGER.warning(
+            "Cloud Alexa alias reconciliation is unavailable: _sync_helper is missing"
+        )
+        return None
+    return helper
+
+
 async def handle_registry_update(hass: Any, event: Any) -> None:
     """Reconcile added/removed aliases while keeping existing endpoint IDs stable."""
     data = event.data
@@ -72,15 +83,12 @@ async def handle_registry_update(hass: Any, event: Any) -> None:
         cache.pop(old_entity_id, None)
 
     aliases_changed = previous_aliases != current_aliases or bool(old_entity_id)
-    if not aliases_changed:
-        return
-
     config = await _get_cloud_alexa_config(hass)
     if config is None or not getattr(config, "enabled", True):
         return
 
-    # Do not leak aliases for entities not exposed to Alexa.
-    if action != "remove" and not config.should_expose(entity_id):
+    exposed = action != "remove" and config.should_expose(entity_id)
+    if not aliases_changed and (exposed or not previous_aliases):
         return
 
     stale_ids: list[str] = []
@@ -88,21 +96,25 @@ async def handle_registry_update(hass: Any, event: Any) -> None:
         stale_ids.extend(get_alias_alexa_ids(hass, old_entity_id, previous_aliases))
     else:
         old_ids = set(get_alias_alexa_ids(hass, entity_id, previous_aliases))
-        new_ids = set(get_alias_alexa_ids(hass, entity_id, current_aliases))
+        new_ids = (
+            set(get_alias_alexa_ids(hass, entity_id, current_aliases)) if exposed else set()
+        )
         stale_ids.extend(sorted(old_ids - new_ids))
 
     # Syncing additions and deleting stale endpoints are deliberately
     # independent: a failure in the private Cloud sync API must not also
     # skip removal of endpoints that Alexa should no longer see.
-    if action != "remove":
-        try:
-            # Add/update current aliases first. This mirrors the old patch and
-            # avoids a gap when an alias is changed or an entity is renamed.
-            await config._sync_helper([entity_id], [])
-        except NoTokenAvailable:
-            return
-        except Exception:
-            _LOGGER.exception("Failed to sync Alexa aliases for %s", entity_id)
+    if exposed:
+        sync_helper = _sync_helper(config)
+        if sync_helper is not None:
+            try:
+                # Add/update current aliases first. This mirrors the old patch and
+                # avoids a gap when an alias is changed or an entity is renamed.
+                await sync_helper([entity_id], [])
+            except NoTokenAvailable:
+                return
+            except Exception:
+                _LOGGER.exception("Failed to sync Alexa aliases for %s", entity_id)
 
     if not stale_ids:
         return

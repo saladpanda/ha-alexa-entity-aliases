@@ -31,3 +31,5 @@ jobs:
         run: |
           python tests/test_model_identity.py
           python tests/test_patch_roundtrip.py
+          python tests/test_directive_resolution.py
+          python tests/test_cloud_reconciliation.py

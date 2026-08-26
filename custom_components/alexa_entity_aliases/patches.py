@@ -8,7 +8,7 @@ from http import HTTPStatus
 import inspect
 import json
 import logging
-from typing import Any, cast
+from typing import Any
 
 import aiohttp
 
@@ -21,7 +21,7 @@ from homeassistant.components.alexa.diagnostics import async_redact_auth_data
 from homeassistant.components.alexa.errors import NoTokenAvailable, RequireRelink
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
-from homeassistant.util.json import JsonObjectType, json_loads_object
+from homeassistant.util.json import json_loads_object
 
 from .model import (
     AliasAlexaEntity,
@@ -36,9 +36,10 @@ from .model import (
 _LOGGER = logging.getLogger(__name__)
 _PATCH_MARKER = "__alexa_entity_aliases_patch__"
 
-# (owner, attribute name, pre-patch value) for every installed patch, in
+# (owner, attribute name, pre-patch value, installed value) for every patch, in
 # install order. Used by uninstall() to fully restore Core modules.
-_ORIGINALS: list[tuple[Any, str, Any]] = []
+_ORIGINALS: list[tuple[Any, str, Any, Any]] = []
+_INSTALLED = False
 
 
 def _mark(obj: Any) -> Any:
@@ -55,7 +56,7 @@ _MISSING = object()
 
 
 def _set_patched(owner: Any, name: str, value: Any) -> None:
-    _ORIGINALS.append((owner, name, getattr(owner, name, _MISSING)))
+    _ORIGINALS.append((owner, name, getattr(owner, name, _MISSING), value))
     setattr(owner, name, value)
 
 
@@ -97,9 +98,25 @@ def validate_core_shape() -> None:
             alexa_state_report.AlexaDirective.load_entity,
             {"self", "hass", "config"},
         ),
-        "async_send_add_or_update_message": (
+        "handlers.async_get_entities": (
+            alexa_handlers.async_get_entities,
+            {"hass", "config"},
+        ),
+        "state_report.async_send_add_or_update_message": (
             alexa_state_report.async_send_add_or_update_message,
             {"hass", "config", "entity_ids"},
+        ),
+        "state_report.async_send_delete_message": (
+            alexa_state_report.async_send_delete_message,
+            {"hass", "config", "entity_ids"},
+        ),
+        "state_report.async_send_changereport_message": (
+            alexa_state_report.async_send_changereport_message,
+            {"hass", "config", "alexa_entity", "alexa_properties"},
+        ),
+        "state_report.async_send_doorbell_event_message": (
+            alexa_state_report.async_send_doorbell_event_message,
+            {"hass", "config", "alexa_entity"},
         ),
     }
     for name, (func, params) in required_params.items():
@@ -112,6 +129,9 @@ def validate_core_shape() -> None:
 
 def install() -> None:
     """Install alias behavior into unmodified Core modules."""
+    global _INSTALLED
+    if _INSTALLED:
+        return
     validate_core_shape()
     try:
         _install_config_api()
@@ -121,22 +141,32 @@ def install() -> None:
     except Exception:
         uninstall()
         raise
+    _INSTALLED = True
     _LOGGER.info("Installed Alexa alias compatibility shim")
 
 
 def uninstall() -> None:
     """Restore Core modules to their pre-install state."""
+    global _INSTALLED
     if not _ORIGINALS:
+        _INSTALLED = False
         return
     while _ORIGINALS:
-        owner, name, original = _ORIGINALS.pop()
+        owner, name, original, replacement = _ORIGINALS.pop()
         try:
+            if getattr(owner, name, _MISSING) is not replacement:
+                _LOGGER.warning(
+                    "Not restoring Alexa attribute %s because another integration changed it",
+                    name,
+                )
+                continue
             if original is _MISSING:
                 delattr(owner, name)
             else:
                 setattr(owner, name, original)
         except Exception:
             _LOGGER.exception("Unable to restore patched Alexa attribute %s", name)
+    _INSTALLED = False
     _LOGGER.info("Removed Alexa alias compatibility shim")
 
 
@@ -238,6 +268,22 @@ async def _post_response(hass: Any, config: Any, message: Any, token: str) -> An
         json=message.serialize(),
         allow_redirects=True,
     )
+
+
+def _response_error(response_text: str) -> tuple[str, str] | None:
+    """Extract a documented Alexa error without trusting a remote response body."""
+    try:
+        response_json = json_loads_object(response_text)
+    except (TypeError, ValueError):
+        return None
+    payload = response_json.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    code = payload.get("code")
+    description = payload.get("description")
+    if not isinstance(code, str) or not isinstance(description, str):
+        return None
+    return code, description
 
 
 async def _async_send_add_or_update_message(
@@ -359,9 +405,16 @@ async def _async_send_changereport_message(
         if response.status == HTTPStatus.ACCEPTED:
             continue
 
-        response_json = json_loads_object(response_text)
-        response_payload = cast(JsonObjectType, response_json["payload"])
-        if response_payload["code"] == "INVALID_ACCESS_TOKEN_EXCEPTION":
+        response_error = _response_error(response_text)
+        if response_error is None:
+            _LOGGER.error(
+                "Unexpected ChangeReport response for %s from Alexa: HTTP %s",
+                alexa_entity.entity_id,
+                response.status,
+            )
+            continue
+        code, description = response_error
+        if code == "INVALID_ACCESS_TOKEN_EXCEPTION":
             if invalidate_access_token:
                 config.async_invalidate_access_token()
                 await _async_send_changereport_message(
@@ -376,8 +429,8 @@ async def _async_send_changereport_message(
         _LOGGER.error(
             "Error when sending ChangeReport for %s to Alexa: %s: %s",
             alexa_entity.entity_id,
-            response_payload["code"],
-            response_payload["description"],
+            code,
+            description,
         )
 
 
@@ -422,13 +475,20 @@ async def _async_send_doorbell_event_message(
             _LOGGER.debug("Received (%s): %s", response.status, response_text)
         if response.status == HTTPStatus.ACCEPTED:
             continue
-        response_json = json_loads_object(response_text)
-        response_payload = cast(JsonObjectType, response_json["payload"])
+        response_error = _response_error(response_text)
+        if response_error is None:
+            _LOGGER.error(
+                "Unexpected DoorbellPress response for %s from Alexa: HTTP %s",
+                alexa_entity.entity_id,
+                response.status,
+            )
+            continue
+        code, description = response_error
         _LOGGER.error(
             "Error when sending DoorbellPress event for %s to Alexa: %s: %s",
             alexa_entity.entity_id,
-            response_payload["code"],
-            response_payload["description"],
+            code,
+            description,
         )
 
 
