@@ -117,7 +117,7 @@ def test_double_install_is_harmless() -> None:
 
 
 def test_uninstall_preserves_foreign_patch() -> None:
-    owner, name = SNAPSHOT_ATTRS[0]
+    owner, name = SNAPSHOT_ATTRS[6]
     original = getattr(owner, name)
     patches.install()
 
